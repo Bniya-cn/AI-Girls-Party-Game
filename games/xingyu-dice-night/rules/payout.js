@@ -33,7 +33,7 @@ export function settleRound(game) {
     const awards = game.prizes[index].map((card,i)=>{
       const owner = eligible[i]?.owner ?? null;
       if (Number.isInteger(owner)) game.wallets[owner].push(card);
-      else game.deck.push(card);
+      else (game.discards ?? game.deck).push(card);
       return {value:cardValue(card),owner};
     });
     return {ranks,awards};

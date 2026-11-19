@@ -1,6 +1,6 @@
 import { shuffledDeck } from '../rules/payout.js';
 import { randomBytes, randomInt } from 'node:crypto';
-import { practiceState, computerAction, computerSeat } from './practice.js';
+import { practiceState, computerAction, computerSeat, decider } from './practice.js';
 import { WebSocket } from 'ws';
 import { lobby, join, transition, project } from '../rules/engine.js';
 import { check, fields } from '../rules/modules.js';
@@ -9,9 +9,10 @@ const send = (socket, body) => {
   if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(body));
 };
 const uuid = value => typeof value === 'string' && /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value);
-const roll = count => Array.from({ length: count }, () => randomInt(1, 7));
 
-export function attachRooms(server, botDelayMs = 650) {
+
+export function attachRooms(server, {botDelayMs=650, randomIndex=randomInt}={}) {
+  const roll=count=>Array.from({length:count},()=>1+randomIndex(6));
   const rooms = new Map(), credentials = new Map();
   const present = seat => seat.bot || Boolean(seat.socket);
   function cancelComputer(room) {
@@ -28,16 +29,16 @@ export function attachRooms(server, botDelayMs = 650) {
     if (['start','nextRound'].includes(command?.kind) && room.state.players.length === 2) outcomes = roll(8);
     if (command?.kind === 'roll' && room.state.phase === 'roll' && room.state.game.actor === actor)
       outcomes = roll(room.state.game.hands[actor].length);
-    room.state = transition(room.state, actor, command, outcomes, command?.kind==='start'?shuffledDeck(randomInt):undefined);
+    room.state = transition(room.state, actor, command, outcomes, command?.kind==='start'?shuffledDeck(randomIndex):undefined,roll(4));
     room.revision++;
   }
   function scheduleComputer(room) {
-    if (!room.practice || room.botTimer || !room.seats[0]?.socket || room.state.game.actor !== computerSeat) return;
+    if (!room.practice || room.botTimer || !room.seats[0]?.socket || decider(room.state) !== computerSeat) return;
     const revision = room.revision;
     room.botTimer = setTimeout(() => {
       room.botTimer = null;
       if (rooms.get(room.code) !== room || !room.seats[0]?.socket || room.revision !== revision) return;
-      const command = computerAction(room.state);
+      const command = computerAction(room.state,randomIndex);
       if (!command) return;
       apply(room, computerSeat, command);
       broadcast(room);
@@ -45,7 +46,7 @@ export function attachRooms(server, botDelayMs = 650) {
   }
   function snapshot(room, seat) {
     send(seat.socket, { type: 'state', room: room.code, you: seat.id, revision: room.revision,
-      practice: Boolean(room.practice), online: room.seats.map(present), state: project(room.state) });
+      practice: Boolean(room.practice), online: room.seats.map(present), state: project(room.state,seat.id) });
   }
   function broadcast(room) {
     for (const seat of room.seats) if (seat.socket) snapshot(room, seat);
@@ -68,12 +69,12 @@ export function attachRooms(server, botDelayMs = 650) {
         check(!binary, '仅接受 JSON 文本');
         m = JSON.parse(data.toString());
         if (!seat) {
-          const keys = { practice:['type','key','name','f1'], create: ['type','key','name'], join: ['type','key','name','room'], resume: ['type','key','room'] };
+          const keys = { practice:['type','key','name',m?.modules!==undefined?'modules':'f1'], create: ['type','key','name'], join: ['type','key','name','room'], resume: ['type','key','room'] };
           check(m && typeof m.type === 'string' && Object.hasOwn(keys, m.type) && fields(m, keys[m.type]) && uuid(m.key), '入房格式错误');
-          if (m.type === 'practice') check(typeof m.f1 === 'boolean', '练习配置错误');
+          if (m.type === 'practice') check(Array.isArray(m.modules) || typeof m.f1 === 'boolean', '练习配置错误');
           if (m.type === 'resume' || m.type === 'join') check(typeof m.room === 'string' && /^[A-F0-9]{8}$/.test(m.room), '房间码无效');
           if (m.type !== 'resume') check(typeof m.name === 'string' && m.name.trim().length > 0 && m.name.length <= 20, '昵称须为 1–20 字');
-          const handshake = JSON.stringify([m.type,m.room,m.name,m.f1]);
+          const handshake = JSON.stringify([m.type,m.room,m.name,m.modules??m.f1]);
           const existing = credentials.get(m.key);
           if (existing) {
             check((m.type === 'resume' && m.room === existing.room.code) || existing.handshake === handshake, '席位凭证不匹配');
@@ -85,7 +86,7 @@ export function attachRooms(server, botDelayMs = 650) {
               let code;
               do { code = randomBytes(4).toString('hex').toUpperCase(); } while (rooms.has(code));
               const practice = m.type === 'practice';
-              const state = practice ? practiceState(m.name.trim(), m.f1, roll(8), shuffledDeck(randomInt)) : lobby(m.name.trim());
+              const state = practice ? practiceState(m.name.trim(), m.modules??m.f1, roll(8), shuffledDeck(randomIndex)) : lobby(m.name.trim());
               room = { code, revision: 1, state, practice, seats: [], lastSeen: Date.now() };
               rooms.set(code, room);
             } else {

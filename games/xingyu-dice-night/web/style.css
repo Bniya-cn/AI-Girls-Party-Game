@@ -31,7 +31,7 @@ h1 span{color:#3e526c}.invitation{font-size:clamp(16px,1.7vw,24px);margin:1rem 0
 .venue.legal .quantity{background:#684b18}.venue:hover,.venue:focus-visible{outline:2px solid #fff3c2;outline-offset:1px}
 .flat #targets{inset:3% 0; height:94%;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:#274754eb;padding:10px;border:2px solid #bb9f71;border-radius:18px}
 .flat .venue{position:relative;background:var(--picture) center/contain no-repeat,#c7b9a5;border:1px solid #f8dba0}
-.attached::after{content:'F1';position:absolute;right:5%;bottom:17%;background:#294858;padding:1px 4px}
+.attached::after{content:attr(data-face);position:absolute;right:5%;bottom:17%;background:#294858;padding:1px 4px}
 #seats{pointer-events:none;position:absolute;inset:0}.seat{position:absolute;display:grid;justify-items:center;width:clamp(80px,9vw,138px);color:#fff5df;text-align:center;transform:translateY(-50%)}
 .seat[data-pos="0"],.seat[data-pos="2"],.seat[data-pos="4"]{left:1%}.seat[data-pos="1"],.seat[data-pos="3"]{right:1%}
 .seat[data-pos="0"]{top:17%}.seat[data-pos="1"]{top:31%}.seat[data-pos="2"]{top:50%}.seat[data-pos="3"]{top:72%}.seat[data-pos="4"]{top:83%}
@@ -76,3 +76,22 @@ fieldset{margin:.8em 0 1em;padding:0;border:0}legend{margin:0 0 .5em;color:#eada
 #result-dialog{width:min(460px,94vw)}#result-round{color:var(--gold);letter-spacing:.12em}#result-title{margin:8px 0 18px}
 .score-row{display:grid;grid-template-columns:1fr auto;border-top:1px solid #c5aa7c88;padding:9px 0;gap:3px 10px}.score-row b{font-size:21px;color:#ffe2a3}.score-row small{grid-column:1/-1}
 #accounts{margin:14px 0}#accounts p{font-size:.8rem}#back-to-table{margin-top:4px}
+
+.royale-entry{display:flex;gap:8px;margin:10px 0}.royale-entry button{background:#304b5bee;color:#fff4d2;min-height:44px}
+.board-art{width:64px;height:64px;object-fit:contain}.venue .board-art{position:absolute;right:4%;top:8%;width:28%;height:35%;pointer-events:none}.spatial .venue .board-art{display:none}
+.venue.closed .face-number:after{content:' 封场';color:#fff0cb;background:#854b41;font-size:12px}
+#board-picker{width:min(680px,96vw)}#board-list,#board-slots,#power-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.4rem}
+.board-choice{background:#314655;border:1px solid #b79972;border-radius:9px;display:flex;align-items:center;min-height:44px;text-align:left;padding:2px 5px;font-size:14px}
+.board-choice img{width:36px;height:36px;object-fit:contain}.board-choice[aria-pressed=true]{outline:2px solid #f3ce7f;background:#614d39}
+.mount{display:grid;align-content:start}.mount>.choice,.picker-footer button,.mini-choices button,#power-options button{min-height:44px}
+.unmount{padding:2px;background:transparent;color:#edce96;min-height:44px;font-size:12px}.picker-footer{display:flex;justify-content:space-between;gap:8px;margin-top:14px}
+.mini-choices{display:flex;flex-wrap:wrap;gap:5px;max-height:min(25dvh,145px);max-width:min(56vw,630px);overflow:auto;padding:3px}.event-line{display:block;color:#ffe5ac;font-size:.85em}
+#ledger-dialog{width:min(520px,92vw)}#royale-ledger p{border-bottom:1px solid #c5aa7c55;padding:4px 0}
+@media(max-width:700px){.mini-choices{max-width:100%;max-height:18dvh}.rail .wordmark{font-size:13px}.event-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90vw}}
+@media(prefers-reduced-motion:no-preference){.mini-choices,.event-line{animation:show-cue .18s ease-out}@keyframes show-cue{from{opacity:.4;translate:0 3px}to{opacity:1;translate:0 0}}}
+
+.arrangement{display:flex;flex-wrap:wrap;align-items:center;gap:3px;max-width:310px}.module-piece{display:inline-flex;align-items:center;font-size:12px;color:#f7e8c6;gap:2px}.module-piece:before{content:'';width:22px;height:22px;flex:none;background:url('./pieces/table-kit.png') var(--glyph) / 600% 500%}.on-track{background:#776345;border-radius:6px}
+.venue.deciding{outline:3px solid #ffcd76}.venue.income .prize{background:#715622}.hud:has(.mini-choices) .actions{max-width:62%;display:grid;justify-items:end;gap:4px}
+@media(max-width:700px){.hud:has(.mini-choices) .actions{max-width:100%;justify-items:start}.hud .arrangement{max-width:100%}.hud .module-piece{font-size:11px}.hud .module-piece:before{width:15px;height:15px}}
+@media(max-height:520px) and (orientation:landscape){.hud .arrangement{display:none}.mini-choices{max-height:19dvh}}
+@media(prefers-reduced-motion:no-preference){.on-track,.venue.income .prize{animation:collect-glow .35s ease-out}@keyframes collect-glow{50%{filter:brightness(1.55)}}}

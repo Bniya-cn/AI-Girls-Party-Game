@@ -67,10 +67,23 @@ export function makeTable(stage,buttons) {
     art.rotation.x=-Math.PI/2;furniture.add(art);
     return {plate,surface,art};
   });
-  const tile=models.tile(), f1Texture=artLoader.load(artUrl('f1'),invalidate);
-  f1Texture.colorSpace=THREE.SRGBColorSpace;
-  const badge=new THREE.Sprite(new THREE.SpriteMaterial({map:f1Texture,depthTest:false}));
-  badge.scale.set(.82,.82,1); furniture.add(tile,badge);
+  const attachments=new Map();
+  function mountBoards(slots){
+    const used=new Set(slots.map(m=>m.face));
+    for(const [id,part] of attachments)part.visible=used.has(id);
+    for(const {face,venue} of slots){
+      let part=attachments.get(face);
+      if(!part){
+        part=new THREE.Group();
+        const base=models.tile(face);base.scale.set(.67,1,.85);part.add(base);
+        const map=artLoader.load(artUrl(face.toLowerCase()),invalidate);map.colorSpace=THREE.SRGBColorSpace;
+        const badge=new THREE.Sprite(new THREE.SpriteMaterial({map,depthTest:false}));
+        badge.scale.set(.82,.82,1);badge.position.y=.24;part.add(badge);
+        attachments.set(face,part);furniture.add(part);
+      }
+      const [x,z]=centers[venue-1];part.position.set(x+.87,.18,z-.76);part.visible=true;
+    }
+  }
   function layout(){
     const w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;
     const cols=w/h<1.12?2:3, rows=6/cols;
@@ -95,9 +108,7 @@ export function makeTable(stage,buttons) {
   function update(state) {
     current=state;if(!centers.length)return;
     pieces.clear();moving=[];
-    const g=state.game, slot=state.config.modules.find(m=>m.face==='F1');
-    badge.visible=tile.visible=!!slot;
-    if(slot){const [x,z]=centers[slot.venue-1];tile.position.set(x+.87,.18,z-.76);tile.scale.set(.67,1,.85);badge.position.set(x+.87,.42,z-.76);}
+    const g=state.game;mountBoards(state.config.modules);
     g?.venues.forEach((dice,i)=>dice.forEach((d,j)=>{
       const [x,z]=centers[i],size=d.big ? .33 : .245;
       const die=place(pieces,models.die(d),x-1.34+(j%8)*.37,.14+size/2+Math.floor(j/16)*.34,z+.36+(Math.floor(j/8)%2)*.32);

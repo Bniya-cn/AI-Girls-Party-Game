@@ -8,9 +8,12 @@ const mesh = (geometry, color) => new THREE.Mesh(geometry, new THREE.MeshStandar
 const box = (w,h,d,color) => mesh(new THREE.BoxGeometry(w,h,d),color);
 const pipPatterns = [[], [[0,0]], [[-1,-1],[1,1]], [[-1,-1],[0,0],[1,1]], [[-1,-1],[-1,1],[1,-1],[1,1]],
   [[-1,-1],[-1,1],[0,0],[1,-1],[1,1]], [[-1,-1],[-1,0],[-1,1],[1,-1],[1,0],[1,1]]];
-function dieModel(owner, face) {
+function dieModel(owner, face, extra) {
   const color = owner === 'gray' ? 0x939aa4 : owner === 'neutral' ? 0x35404d : seatColors[owner];
-  const die = box(1,1,1,color);
+  const die = box(1,1,1,extra ? 0x191b23 : color);
+  if(extra){
+    const band=box(1.012,.12,1.012,color);band.position.y=-.28;die.add(band);
+  }
   for (const [x,z] of pipPatterns[face || 0]) {
     const pip = mesh(new THREE.CylinderGeometry(.085,.085,.015,10),0xfff9dd);
     pip.position.set(x*.27,.503,z*.27);
@@ -36,7 +39,7 @@ export function modelRegistry(paths = modelPaths, load = url => new GLTFLoader()
     table: () => instance('table', () => box(12,.32,8,0xe7dcc4)),
     venue: () => instance('venue', () => box(3.45,.12,2.14,0x899eb3)),
     chip: () => instance('chip', () => mesh(new THREE.CylinderGeometry(.24,.24,.09,24),0xd6ae63)),
-    tile: () => instance('tile.F1', () => box(1.22,.15,.38,0x728490)),
-    die: d => instance('die.' + d.owner + '.' + (d.face || 0), () => dieModel(d.owner,d.face))
+    tile: (face='F1') => instance('tile.'+face, () => box(1.22,.15,.38,0x728490)),
+    die: d => instance((d.extra?'die.extra.':'die.') + d.owner + '.' + (d.face || 0), () => dieModel(d.owner,d.face,d.extra))
   };
 }

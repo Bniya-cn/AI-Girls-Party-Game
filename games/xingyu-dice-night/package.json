@@ -9,6 +9,7 @@
     "test": "node --test test/*.test.js",
     "build:preview": "vite build web --outDir ../dist-preview --emptyOutDir",
     "build:practice": "vite build web --outDir ../dist-practice --emptyOutDir",
+    "build:royale": "vite build web --outDir ../dist-royale --emptyOutDir",
     "build:match": "vite build web --outDir ../dist-match --emptyOutDir"
   },
   "engines": {

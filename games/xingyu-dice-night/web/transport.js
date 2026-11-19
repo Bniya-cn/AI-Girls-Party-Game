@@ -38,7 +38,7 @@ export function roomClient(onChange) {
   }
   return { connect,
     enter(type,name,room, f1=false) {
-      saved = { hello: { type, name, key:crypto.randomUUID(), ...(type==='join'?{room}:{}), ...(type==='practice'?{f1}:{}) }, pending:null };
+      saved = { hello: { type, name, key:crypto.randomUUID(), ...(type==='join'?{room}:{}), ...(type==='practice'?(Array.isArray(f1)?{modules:f1}:{f1}):{}) }, pending:null };
       message='连接中…'; persist(); connect();
     },
     reset() {

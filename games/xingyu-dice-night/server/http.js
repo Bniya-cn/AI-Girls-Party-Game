@@ -11,7 +11,7 @@ const mime = { '.html':'text/html; charset=utf-8','.js':'text/javascript','.css'
   '.glb':'model/gltf-binary','.gltf':'model/gltf+json','.bin':'application/octet-stream',
   '.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp' };
 
-export function gameServer() {
+export function gameServer(options={}) {
   const localHost = req => ['127.0.0.1','localhost'].some(host => req.headers.host === host + ':' + req.socket.localPort);
   const server = createServer(async (req, res) => {
     try {
@@ -34,7 +34,7 @@ export function gameServer() {
     }
     ws.handleUpgrade(req, socket, head, client => ws.emit('connection', client));
   });
-  attachRooms(ws);
+  attachRooms(ws,options);
   return { server, listen: (port = 4321) => new Promise((ok, fail) => {
     server.once('error', fail);
     server.listen(port, '127.0.0.1', () => { server.off('error', fail); ok(server.address().port); });

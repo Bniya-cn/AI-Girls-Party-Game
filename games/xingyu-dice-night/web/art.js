@@ -35,6 +35,10 @@ export function artUrl(name) {
     rectangle(63,207,130,17,gold);rectangle(53,224,150,10,blue);star(128,90,23,cream);
   }else if(name==='f1'){
     for(const [x,y] of [[45,113],[110,128],[88,66]]){rectangle(x,y,65,65,blue);rectangle(x+5,y+5,55,8,gold);}
+  }else if(/^[a-h][12]$/.test(name)){
+    const index=name.charCodeAt(0)-97;
+    disc(128,128,101,['#8c647a','#60758f','#9c7747','#84645b','#51786c','#607784','#816c91','#91708b'][index]);
+    disc(128,128,87,blue);p.fillStyle=cream;p.textAlign='center';p.textBaseline='middle';p.font='bold 72px sans-serif';p.fillText(name.toUpperCase(),128,126);
   }else if(name==='ribbons'){
     for(let i=0;i<16;i++)star(i%2?221-i%12:20+i%17,i*16,7+i%7,gold);
   }else{disc(128,128,79,blue);disc(128,128,69,gold);disc(128,128,60,blue);star(128,128,52,cream);}

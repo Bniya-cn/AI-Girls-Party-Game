@@ -5,7 +5,7 @@ export const faces = Object.fromEntries([
 ].flatMap((pair, index) => pair.map((name, side) => {
   const board = 'ABCDEFGH'[index];
   const id = board + (side + 1);
-  return [id, { id, board, name, enabled: id === 'F1' }];
+  return [id, { id, board, name, enabled: !['C2','G1','H2'].includes(id) }];
 })));
 
 export function check(condition, message) {
@@ -18,7 +18,7 @@ export function fields(object, names) {
 }
 
 export function validateConfig(config) {
-  check(fields(config, ['seats', 'modules']), '配置格式错误');
+  check((fields(config, ['seats', 'modules']) || (fields(config, ['seats','modules','mode']) && config.mode==='custom')), '配置格式错误');
   check(Number.isInteger(config.seats) && config.seats >= 2 && config.seats <= 5, '座位须为 2–5 个');
   check(Array.isArray(config.modules) && config.modules.length <= 6, '场地最多六个');
   const venues = new Set(), boards = new Set();
