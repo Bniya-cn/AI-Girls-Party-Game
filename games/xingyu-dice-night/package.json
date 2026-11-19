@@ -1,0 +1,22 @@
+{
+  "name": "star-isles-dice-night",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build web --outDir ../dist --emptyOutDir",
+    "start": "node server/start.js",
+    "test": "node --test test/*.test.js",
+    "build:preview": "vite build web --outDir ../dist-preview --emptyOutDir"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "three": "0.187.0",
+    "ws": "8.23.0"
+  },
+  "devDependencies": {
+    "vite": "^8.0.0"
+  }
+}

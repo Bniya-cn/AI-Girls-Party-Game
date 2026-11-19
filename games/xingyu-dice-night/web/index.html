@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="data:,"><title>星屿骰夜 · 星光桌游社</title></head>
+<body>
+<main id="world">
+<section id="lobby" aria-label="星光桌游社大厅">
+  <div class="club-mark"><img data-art="star" alt="">星光桌游社</div>
+  <img class="host" data-art="host" alt="桌游社欢迎立牌">
+  <div class="welcome"><div class="hairline"></div><h1>星屿<span>骰夜</span></h1>
+  <p class="invitation">在窗边留个座，一起掷骰吧。</p>
+  <div class="entry-actions"><button id="create" class="primary">开一桌 <b aria-hidden="true">↗</b></button><button id="join" class="glass">凭码入座</button></div>
+  <small>2–5 人联机 <i>✧</i> 单轮投放</small></div>
+</section>
+<section id="room" hidden aria-label="游戏牌桌">
+  <header class="rail"><span class="wordmark"><img data-art="star" alt="">星屿骰夜</span><div class="room-tools">
+  <button class="code" id="code-copy" title="复制房间码"></button><button id="settings" class="glass">桌面设置</button></div></header>
+  <div class="arena">
+    <div id="stage" class="flat"><canvas id="canvas" aria-hidden="true"></canvas><div id="targets" aria-label="六个场地"></div></div>
+    <div id="seats" aria-label="围桌席位"></div>
+  </div>
+  <footer class="hud"><div class="phase" aria-live="polite"><small id="phase-label"></small><h2 id="turn-title"></h2><p id="hint"></p></div><div id="actions" class="actions"></div></footer>
+</section>
+<p id="notice" role="status" hidden></p>
+<dialog id="entry-dialog"><form id="entry"><button type="button" class="close" aria-label="关闭">×</button>
+<h2 id="entry-title"></h2><label>桌边昵称<input id="name" maxlength="20" required autocomplete="nickname" placeholder="朋友们怎么称呼你？"></label>
+<label id="room-input">房间码<input id="code" maxlength="8" pattern="[a-fA-F0-9]{8}" spellcheck="false" autocapitalize="characters" placeholder="8 位房间码"></label><button class="primary" id="enter"></button></form></dialog>
+<dialog id="settings-dialog"><button class="close" aria-label="关闭">×</button><h2>桌面设置</h2><div id="options"></div></dialog>
+<dialog id="venue-dialog"><button class="close" aria-label="关闭">×</button><img id="detail-art" class="detail-art" alt=""><h2 id="venue-title"></h2><div id="venue-detail"></div></dialog>
+<button id="recover" class="glass" hidden>返回入口</button>
+</main><script type="module" src="/main.js"></script></body></html>

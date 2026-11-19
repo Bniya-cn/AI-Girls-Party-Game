@@ -1,0 +1,32 @@
+# Dependencies and generated builds
+node_modules/
+dist/
+dist-preview/
+coverage/
+.vite/
+.cache/
+.npm/
+*.tsbuildinfo
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Local source art, licensed packs and runtime media
+.source-art/
+**/web/public/art/
+**/web/public/models/
+art-sources.json
+*.zip
+*.tar
+*.tgz
+*.tar.gz
+*.pem
+*.key
+
+# Local profiles, screenshots and test reports
+playwright-report/
+test-results/
+screenshots/
+preview-output/
