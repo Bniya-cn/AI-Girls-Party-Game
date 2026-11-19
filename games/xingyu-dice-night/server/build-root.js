@@ -1,1 +1,2 @@
-export const buildRoot = new URL(process.env.GAME_PREVIEW === '1' ? '../dist-preview/' : '../dist/', import.meta.url);
+const builds = { '1':'../dist-preview/', practice:'../dist-practice/', match:'../dist-match/' };
+export const buildRoot = new URL(builds[process.env.GAME_PREVIEW] || '../dist/', import.meta.url);

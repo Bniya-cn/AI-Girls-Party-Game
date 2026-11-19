@@ -78,13 +78,26 @@ test('two real WS clients: create/join, host permissions, revisions, replay, tak
   const peer=await client(port,hello);
   assert.equal((await peer.state(7)).you,1);
   let current=first;
-  for(let steps=0;current.state.phase!=='complete' && steps<70;steps++){
-    const g=current.state.game,actor=g.actor===0?resumed:peer;
-    const cmd={roll:()=>({kind:'roll'}),select:()=>({kind:'place',face:g.roll[0].face}),
+  for(let steps=0;current.state.phase!=='complete' && steps<180;steps++){
+    const g=current.state.game,actor=(g.actor===0 || current.state.phase==='between')?resumed:peer;
+    const cmd={between:()=>({kind:'nextRound'}),roll:()=>({kind:'roll'}),select:()=>({kind:'place',face:g.roll[0].face}),
       gray:()=>({kind:'gray',group:g.groups.findIndex(n=>n>0),venue:2})}[current.state.phase]();
-    current=await apply(actor,current.revision,cmd);
+    const finalAction=msg(current.revision,cmd);
+    actor.send(finalAction);
+    const done=await actor.read(m=>m.id===finalAction.id);assert.equal(done.type,'ack');
+    current=await actor.state(done.revision);
+    if(['between','complete'].includes(current.state.phase)){
+      actor.send(finalAction);
+      assert.deepEqual(await actor.read(m=>m.id===finalAction.id),done);
+      assert.deepEqual((await actor.state(done.revision)).state,current.state);
+      assert.equal(current.state.game.history.length,current.state.game.round);
+    }
   }
   assert.equal(current.state.phase,'complete');
+  assert.equal(current.state.game.round,3);
+  assert.ok(current.state.game.scores.every(r=>r.seat===0||r.seat===1));
+  const replacement=await client(port,{type:'resume',room:code,key:hostKey});
+  assert.deepEqual((await replacement.state(current.revision)).state,current.state);
   assert.deepEqual(current.state.game.remaining,[0,0]);
   assert.deepEqual((await (current.you===0?peer:resumed).state(current.revision)).state,current.state);
 });
@@ -119,4 +132,44 @@ test('installed WebP artwork is served byte-for-byte with the correct type',asyn
     const bytes=Buffer.from(await response.arrayBuffer());
     assert.equal(bytes.toString('ascii',8,12),'WEBP');assert.deepEqual(bytes,await readFile(new URL(name,folder)));
   }
+});
+
+test('private practice starts in one request, pauses offline, resumes once and finishes',async t=>{
+  const service=gameServer(),port=await service.listen(0); t.after(()=>service.close());
+  const key=randomUUID(), hello={type:'practice',name:'练习者',key,f1:true};
+  let human=await client(port,hello),v=await human.state(1);
+  assert.equal(v.practice,true);assert.equal(v.state.phase,'roll');
+  assert.deepEqual(v.state.game.remaining,[8,8]);
+  assert.deepEqual(v.online,[true,true]);assert.equal(v.state.players[1].name,'电脑对手');
+  assert.equal(v.state.game.venues.flat().filter(d=>d.owner==='neutral').length,8);
+  const outsider=await client(port,{type:'join',name:'外席',key:randomUUID(),room:v.room});
+  assert.match((await outsider.read(m=>m.type==='error')).message,/可加入/);
+  v=await apply(human,v.revision,{kind:'roll'});
+  v=await apply(human,v.revision,{kind:'pass'});
+  assert.equal(v.state.game.actor,1);
+  await rejects(human,msg(v.revision,{kind:'roll'}),/轮到/);
+  const paused=v,code=v.room;
+  human.socket.close();await once(human.socket,'close');
+  await new Promise(ok=>setTimeout(ok,800));
+  human=await client(port,{type:'resume',key,room:code});
+  v=await human.state(paused.revision);assert.deepEqual(v.state,paused.state);
+  let actions=0;
+  while(v.state.phase!=='complete'){
+    assert.ok(++actions<200);
+    const g=v.state.game;
+    if(g.actor===1){
+      const prev=v;
+      v=await human.state(v.revision+1);
+      if(prev.state.phase==='roll'){assert.equal(v.state.phase,'select');assert.equal(v.state.game.actor,1);}
+      if(prev.state.phase==='select'){assert.ok(v.state.game.remaining[1]<prev.state.game.remaining[1]);}
+      continue;
+    }
+    const command={between:()=>({kind:'nextRound'}),roll:()=>({kind:'roll'}),select:()=>({kind:'place',face:g.roll[0].face}),
+      gray:()=>({kind:'gray',group:g.groups.findIndex(n=>n>0),venue:2})}[v.state.phase]();
+    v=await apply(human,v.revision,command);
+  }
+  assert.deepEqual(v.state.game.remaining,[0,0]);assert.equal(v.state.game.chips[1],6);assert.equal(v.state.game.history.length,3);assert.ok(v.state.game.scores.some(r=>r.winner));
+  human.send({type:'leavePractice'});await once(human.socket,'close');
+  const expired=await client(port,{type:'resume',key,room:code});
+  assert.match((await expired.read(m=>m.type==='error')).message,/失效/);
 });

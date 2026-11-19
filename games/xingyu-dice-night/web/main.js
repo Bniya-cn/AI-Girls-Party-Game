@@ -1,6 +1,7 @@
 import './style.css';
 import { artUrl } from './art.js';
 import { roomClient } from './transport.js';
+import { guidedHint, lessons } from './tutorial.js';
 import { faces } from '../rules/modules.js';
 
 document.documentElement.style.setProperty('--evening','url("'+artUrl('evening')+'")');
@@ -8,7 +9,7 @@ for(const image of document.querySelectorAll('[data-art]')) image.src=artUrl(ima
 const $=id=>document.getElementById(id);
 const venues=['星港咖啡角','月光阅读角','星穹温室','云端音乐室','日落画室','夜航观星台'];
 const roles=['deepseek','claude','gemini','gpt','qwen'];
-const phaseNames={lobby:'候场',roll:'掷骰',select:'落骰',gray:'灰骰板',complete:'轮末'};
+const phaseNames={lobby:'候场',roll:'掷骰',select:'落骰',gray:'灰骰板',between:'轮末',complete:'终局'};
 const el=(tag,content,cls)=>{
   const node=document.createElement(tag);if(content!==undefined)node.textContent=content;if(cls)node.className=cls;return node;
 };
@@ -27,9 +28,40 @@ for(const dialog of document.querySelectorAll('dialog')){
 }
 let latest=null,render3D,loading3D=false,entryMode='create',viewVenue=1,group=0,lastView=null;
 let lastPhase=null, transient='',timer;
+let guideOn = sessionStorage.getItem('star-guide-active') === 'on', lesson=0;
+function setGuide(enabled) {
+  guideOn=enabled;
+  localStorage.setItem('star-guide-preference', enabled?'on':'off');
+  sessionStorage.setItem('star-guide-active', enabled?'on':'off');
+}
+function practice(f1=false) {
+  const name = $('name').value.trim() || sessionStorage.getItem('star-dice-nickname') || '旅行者';
+  if (latest?.view) client.reset();
+  setGuide(localStorage.getItem('star-guide-preference') !== 'off');
+  client.enter('practice',name,undefined,f1);
+}
+function lessonPage(index) {
+  lesson=index;
+  $('lesson-page').textContent='玩法教程　'+(index+1)+' / '+lessons.length;
+  [$('lesson-name').textContent,$('lesson-content').textContent]=lessons[index];
+  $('lesson-prev').disabled=index===0;
+  $('lesson-next').disabled=index===lessons.length-1;
+  $('guide-start').textContent=latest?.view?'开启桌边指引':index===lessons.length-1?'跟着练 · 灰骰板':'跟着练 · 基础桌';
+}
+function openHelp(){lessonPage(0);$('help-dialog').showModal();}
+$('practice').onclick=()=>practice();
+$('lobby-help').onclick=openHelp;$('room-help').onclick=openHelp;
+$('lesson-prev').onclick=()=>lessonPage(lesson-1);
+$('lesson-next').onclick=()=>lessonPage(lesson+1);
+$('guide-start').onclick=()=>{
+  $('help-dialog').close();setGuide(true);
+  if(latest.view) render(latest); else practice(lesson===lessons.length-1);
+};
+$('skip-guide').onclick=()=>{setGuide(false);render(latest);};
+$('quit-practice').onclick=()=>{$('exit-dialog').close();client.reset();};
 const targets=venues.map((name,i)=>{
   const b=el('button',undefined,'venue');b.type='button';b.style.setProperty('--picture','url("'+artUrl('venue-'+(i+1))+'")');
-  b.append(el('span',String(i+1),'face-number'),el('span',name,'venue-name'),el('span','','quantity'));
+  b.append(el('span',String(i+1),'face-number'),el('span',name,'venue-name'),el('span','','prize'),el('span','','quantity'));
   b.onclick=()=>chooseVenue(i+1);$('targets').append(b);return b;
 });
 function showNotice(){
@@ -50,7 +82,7 @@ $('entry').onsubmit=e=>{
 };
 $('name').value=sessionStorage.getItem('star-dice-nickname')||'';
 $('settings').onclick=()=>{renderOptions();$('settings-dialog').showModal();};
-$('code-copy').onclick=async()=>{try{await navigator.clipboard.writeText(latest.view.room);toast('房间码已复制');}catch{toast('房间码 '+latest.view.room);}};
+$('code-copy').onclick=async()=>{if(latest.view.practice){$('exit-dialog').showModal();return;}try{await navigator.clipboard.writeText(latest.view.room);toast('房间码已复制');}catch{toast('房间码 '+latest.view.room);}};
 $('recover').onclick=()=>client.reset();
 function actionable(){
   const p=latest,v=p?.view;
@@ -65,10 +97,56 @@ function chooseVenue(n){
   if(legal(n)){client.act(s.phase==='gray'?{kind:'gray',group,venue:n}:{kind:'place',face:n});return;}
   viewVenue=n;renderDetail();$('venue-dialog').showModal();
 }
+const valueLabel=value=>(value/10000)+' 万';
+function ownerLabel(s,owner){
+  if(Number.isInteger(owner))return s.players[owner].name;
+  return owner==='neutral'?'中立骰':owner==='gray'?'灰骰':'无人领取';
+}
+function awardText(s,award){
+  const result=ownerLabel(s,award.owner)+(Number.isInteger(award.owner)?'':' · 归堆');
+  return valueLabel(award.value)+' → '+result;
+}
+function showResults(){
+  const s=latest.view.state,g=s.game,final=s.phase==='complete';
+  $('result-round').textContent=final?'终局记分　/　三轮完成':'轮末分账　/　第 '+g.round+' 轮';
+  const standings=$('standings'),accounts=$('accounts');
+  standings.replaceChildren();accounts.replaceChildren();
+  if(final){
+    const winners=g.scores.filter(row=>row.winner).map(row=>s.players[row.seat].name);
+    $('result-title').textContent=winners.join('、')+(winners.length>1?' 并列获胜':' 获胜');
+    for(const row of g.scores){
+      const line=el('article',undefined,'score-row');
+      line.append(el('strong',s.players[row.seat].name),el('b',valueLabel(row.total)),
+        el('small',row.cards+' 张奖金牌 · '+valueLabel(row.cash)+'　＋　'+row.chips+' 枚筹码 · '+valueLabel(row.chips*10000)));
+      standings.append(line);
+    }
+  }else{
+    $('result-title').textContent='第 '+g.round+' 轮结算';
+    standings.append(el('p','下轮先手　'+s.players[g.history.at(-1).nextStarter].name));
+  }
+  for(const entry of [...g.history].reverse()){
+    const details=el('details');details.open=!final && entry.round===g.round;
+    details.append(el('summary','第 '+entry.round+' 轮 · 六场明细'));
+    entry.venues.forEach((venue,i)=>{
+      const tied=venue.ranks.filter(r=>r.tied).map(r=>ownerLabel(s,r.owner));
+      details.append(el('p',(i+1)+' 号　'+venue.awards.map(a=>awardText(s,a)).join('　／　')+
+        (tied.length?'；同实力退出：'+tied.join('、'):'')));
+    });accounts.append(details);
+  }
+  if(!$('result-dialog').open)$('result-dialog').showModal();
+}
+$('back-to-table').onclick=()=>$('result-dialog').close();
 function renderDetail(){
   const s=latest.view.state,dice=s.game?.venues[viewVenue-1]||[];
   $('detail-art').src=artUrl('venue-'+viewVenue);$('venue-title').textContent=viewVenue+'号 · '+venues[viewVenue-1];
   const box=$('venue-detail');box.replaceChildren();
+  if(s.game){
+    box.append(el('p','场地奖金　'+s.game.prizes[viewVenue-1].map(valueLabel).join(' / ')));
+    if(s.phase==='between'||s.phase==='complete'){
+      const entry=s.game.history.at(-1).venues[viewVenue-1];
+      box.append(el('p',entry.awards.map(a=>awardText(s,a)).join('　／　')));
+    }
+  }
   if(!dice.length)box.append(el('p','场内暂无骰子。'));
   for(const owner of new Set(dice.map(d=>d.owner))){
     const owned=dice.filter(d=>d.owner===owner),name=s.players[owner]?.name || (owner==='gray'?'灰骰阵营':'中立阵营');
@@ -106,7 +184,6 @@ function renderSeats(v){
 function renderHUD(v,blocked){
   const s=v.state,g=s.game,actions=$('actions');actions.replaceChildren();
   actions.classList.toggle('ended',s.phase==='complete');
-  $('phase-label').textContent='单轮投放　/　'+phaseNames[s.phase];
   let title='',hint='';
   const act=(label,cmd,disabled=false,cls='primary')=>button(actions,label,()=>client.act(cmd),{disabled,cls});
   if(s.phase==='lobby'){
@@ -115,8 +192,13 @@ function renderHUD(v,blocked){
     if(s.players.length===1)actions.append(art('empty','empty-art'));
     act(ready?'取消准备':'准备入座',{kind:'ready',value:!ready},blocked,ready?'glass':'primary');
     if(v.you===0)act('开局',{kind:'start'},blocked||s.players.length<2||v.online.includes(false)||!s.players.every(p=>p.ready));
+  }else if(s.phase==='between'){
+    title='第 '+g.round+' 轮已结算';hint='下轮先手：'+s.players[g.history.at(-1).nextStarter].name;
+    button(actions,'查看分账',showResults);
+    if(v.you===0)act('进入第 '+(g.round+1)+' 轮',{kind:'nextRound'},blocked||v.online.includes(false));
   }else if(s.phase==='complete'){
-    title='本轮投放完成';hint='轻点场地查看各阵营实力。';actions.append(art('ribbons','ribbons'));
+    title='三轮对局完成';hint='查看总分与每轮的场地明细。';button(actions,'终局记分',showResults);actions.append(art('ribbons','ribbons'));
+    if(v.practice)button(actions,'再玩一局',()=>practice(s.config.modules.length>0),{cls:'primary'});
     button(actions,'回到大厅',()=>client.reset(),{cls:'primary'});
   }else{
     const mine=g.actor===v.you,locked=!actionable();title=mine?'轮到你了':s.players[g.actor].name+' 的回合';
@@ -136,21 +218,27 @@ function renderHUD(v,blocked){
     }
     if(v.online.includes(false))hint='席位离线，等待原玩家重连。';
   }
-  $('turn-title').textContent=title;$('hint').textContent=hint;
+  $('turn-title').textContent=title;
+  $('hint').textContent=guideOn && !v.online.includes(false) ? guidedHint(v) : hint;
+  $('skip-guide').hidden=!guideOn;
+  $('phase-label').textContent=(g?'第 '+g.round+' / 3 轮':'三轮对局')+(guideOn?' · 指引':'')+'　/　'+phaseNames[s.phase];
 }
 function render(packet){
   latest=packet;const {view,online,pending,saved}=packet;
   $('lobby').hidden=!!view;$('room').hidden=!view;$('recover').hidden=!saved||online;
-  $('create').disabled=$('join').disabled=saved;showNotice();
+  $('practice').disabled=$('lobby-help').disabled=$('create').disabled=$('join').disabled=saved;showNotice();
   if(!view){lastView=null;lastPhase=null;document.body.classList.remove('playing');return;}
   document.body.classList.add('playing');
   const s=view.state;
   sessionStorage.setItem('star-dice-nickname',s.players[view.you].name);
-  $('code-copy').textContent='房间 '+view.room+'　⧉';
+  $('code-copy').textContent=view.practice?'退出练习':'房间 '+view.room+'　⧉';
+  $('code-copy').title=view.practice?'退出练习':'复制房间码';
   $('settings').hidden=view.you!==0||s.phase!=='lobby';
   if($('settings-dialog').open){if($('settings').hidden)$('settings-dialog').close();else renderOptions();}
   if($('venue-dialog').open)renderDetail();
   if(lastPhase!==s.phase && s.phase==='gray')group=s.game.groups.findIndex(n=>n>0);
+  if(s.phase==='complete' && lastPhase!=='complete')showResults();
+  if(s.phase==='roll' && $('result-dialog').open)$('result-dialog').close();
   lastPhase=s.phase;
   renderSeats(view);renderHUD(view,!online||pending);
   targets.forEach((b,i)=>{
@@ -158,8 +246,10 @@ function render(packet){
     b.classList.toggle('legal',valid);b.classList.toggle('attached',tile);
     const rollCount=s.phase==='select'?s.game.roll.filter(d=>d.face===n).length:0;
     const num=s.game?.venues[i].length||0;
+    const prize=b.querySelector('.prize');
+    prize.textContent=s.game?s.game.prizes[i].map(value=>value/10000).join(' / ')+' 万':'';
     b.lastChild.textContent=valid?(s.phase==='gray'?'放灰骰':'落骰 ×'+rollCount):num?num+' 颗':'';
-    b.setAttribute('aria-label',n+'号 '+venues[i]+(valid?'，可投放':'，查看场地')+(tile?'，灰骰板':''));
+    b.setAttribute('aria-label',n+'号 '+venues[i]+(valid?'，可投放':'，查看场地')+(tile?'，灰骰板':'')+(s.game?'，奖金 '+prize.textContent:''));
   });
   if(lastView!==s){render3D?.(s);lastView=s;}
   if(!loading3D){loading3D=true;import('./table.js').then(({makeTable})=>{

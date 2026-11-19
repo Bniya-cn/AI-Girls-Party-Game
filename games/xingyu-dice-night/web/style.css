@@ -65,3 +65,14 @@ fieldset{margin:.8em 0 1em;padding:0;border:0}legend{margin:0 0 .5em;color:#eada
  .hairline{margin-bottom:6px}.invitation{margin:4px 0 12px}.welcome>small{margin-top:5px}.club-mark{top:3%}.welcome{top:54%}h1{font-size:54px}.host{height:94%}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+.entry-actions{flex-wrap:wrap}.entry-actions button{min-width:100px}.lesson-link,.skip-guide{min-height:44px;background:transparent;color:inherit;text-decoration:underline;text-underline-offset:4px}
+.lesson-link{display:inline-block;font-weight:650;padding:0 .3em}.welcome>small{display:inline-block;margin:.5rem 0 .5rem 1rem}
+#lesson-page{display:block;color:var(--gold);margin:0 0 .5rem}#lesson-content,#exit-dialog p{margin:.85rem 0;line-height:1.55}
+.lesson-nav{display:flex;gap:6px;margin:.85rem 0}.skip-guide{color:#f0d399;font-size:12px;padding:0}.phase:has(.skip-guide:not([hidden])){display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:8px}.phase>small,.phase>h2,.phase>p{grid-column:1}.skip-guide{grid-column:2;grid-row:1/4}.phase{min-width:0}
+@media(max-width:700px) and (orientation:portrait){.entry-actions{gap:5px}.entry-actions button{min-width:0;padding:.55rem .7rem}.welcome>small{font-size:11px}.phase p{line-height:1.25}.phase:has(.skip-guide:not([hidden]))>small{display:none}.room-tools{gap:2px}.rail{gap:3px}.room-tools button{padding-inline:5px}.wordmark{letter-spacing:0}}
+@media(max-height:520px) and (orientation:landscape){.phase{max-width:57%}.phase p{line-height:1.2}.lesson-link{min-height:34px}}
+
+.prize{position:absolute;left:4%;top:28%;background:#243647db;border:1px solid #e1c27a;color:#ffe2a3;padding:1px 4px;border-radius:3px;font-size:clamp(10px,.92vw,14px);white-space:nowrap}.prize:empty{display:none}
+#result-dialog{width:min(460px,94vw)}#result-round{color:var(--gold);letter-spacing:.12em}#result-title{margin:8px 0 18px}
+.score-row{display:grid;grid-template-columns:1fr auto;border-top:1px solid #c5aa7c88;padding:9px 0;gap:3px 10px}.score-row b{font-size:21px;color:#ffe2a3}.score-row small{grid-column:1/-1}
+#accounts{margin:14px 0}#accounts p{font-size:.8rem}#back-to-table{margin-top:4px}
