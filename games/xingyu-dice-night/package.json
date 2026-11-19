@@ -7,7 +7,9 @@
     "build": "vite build web --outDir ../dist --emptyOutDir",
     "start": "node server/start.js",
     "test": "node --test test/*.test.js",
-    "build:preview": "vite build web --outDir ../dist-preview --emptyOutDir"
+    "build:preview": "vite build web --outDir ../dist-preview --emptyOutDir",
+    "build:practice": "vite build web --outDir ../dist-practice --emptyOutDir",
+    "build:match": "vite build web --outDir ../dist-match --emptyOutDir"
   },
   "engines": {
     "node": ">=22.12"

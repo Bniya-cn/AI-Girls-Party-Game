@@ -67,7 +67,7 @@ test('F1 interrupts even on final placement; blank and two-player neutral dice s
   s=t(s,1,action('place',{face:1}));
   assert.throws(()=>t(s,1,action('gray',{group:4,venue:1})));
   s=t(s,1,action('gray',{group:0,venue:1}));
-  assert.equal(s.phase,'complete');
+  assert.equal(s.phase,'between');
   assert.equal(new Set(s.game.venues.flat().map(d=>d.id)).size,28);
 });
 
@@ -80,7 +80,7 @@ test('chips can pass only after rolling; depleted hand skipped; no pass at zero 
   assert.equal(s.game.chips[1],0);
   go(1,'roll',{},Array(8).fill(4));
   assert.throws(()=>go(1,'pass'),/筹码/);
-  go(1,'place',{face:4}); assert.equal(s.phase,'complete');
+  go(1,'place',{face:4}); assert.equal(s.phase,'between');
 });
 
 test('projection explicitly excludes private state and detaches public arrays',()=>{

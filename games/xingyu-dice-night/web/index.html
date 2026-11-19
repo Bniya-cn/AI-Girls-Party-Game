@@ -8,19 +8,27 @@
   <img class="host" data-art="host" alt="桌游社欢迎立牌">
   <div class="welcome"><div class="hairline"></div><h1>星屿<span>骰夜</span></h1>
   <p class="invitation">在窗边留个座，一起掷骰吧。</p>
-  <div class="entry-actions"><button id="create" class="primary">开一桌 <b aria-hidden="true">↗</b></button><button id="join" class="glass">凭码入座</button></div>
-  <small>2–5 人联机 <i>✧</i> 单轮投放</small></div>
+  <div class="entry-actions"><button id="practice" class="primary">单人练习</button><button id="create" class="primary">开一桌 <b aria-hidden="true">↗</b></button><button id="join" class="glass">凭码入座</button></div>
+  <button class="lesson-link" id="lobby-help">玩法教程</button><small>2–5 人联机 <i>✧</i> 三轮对局</small></div>
 </section>
 <section id="room" hidden aria-label="游戏牌桌">
   <header class="rail"><span class="wordmark"><img data-art="star" alt="">星屿骰夜</span><div class="room-tools">
-  <button class="code" id="code-copy" title="复制房间码"></button><button id="settings" class="glass">桌面设置</button></div></header>
+  <button id="room-help" class="glass">玩法教程</button><button class="code" id="code-copy" title="复制房间码"></button><button id="settings" class="glass">桌面设置</button></div></header>
   <div class="arena">
     <div id="stage" class="flat"><canvas id="canvas" aria-hidden="true"></canvas><div id="targets" aria-label="六个场地"></div></div>
     <div id="seats" aria-label="围桌席位"></div>
   </div>
-  <footer class="hud"><div class="phase" aria-live="polite"><small id="phase-label"></small><h2 id="turn-title"></h2><p id="hint"></p></div><div id="actions" class="actions"></div></footer>
+  <footer class="hud"><div class="phase" aria-live="polite"><small id="phase-label"></small><h2 id="turn-title"></h2><p id="hint"></p><button id="skip-guide" class="skip-guide" hidden>跳过指引</button></div><div id="actions" class="actions"></div></footer>
 </section>
 <p id="notice" role="status" hidden></p>
+<dialog id="result-dialog" aria-labelledby="result-title"><button class="close" aria-label="返回牌桌">×</button>
+<small id="result-round"></small><h2 id="result-title"></h2><div id="standings"></div><div id="accounts"></div>
+<button id="back-to-table" class="glass">返回牌桌</button></dialog>
+<dialog id="help-dialog" aria-labelledby="lesson-name"><button class="close" aria-label="关闭">×</button>
+<small id="lesson-page"></small><h2 id="lesson-name"></h2><p id="lesson-content"></p>
+<div class="lesson-nav"><button id="lesson-prev" class="glass">上一步</button><button id="lesson-next" class="glass">下一步</button></div>
+<button id="guide-start" class="primary"></button></dialog>
+<dialog id="exit-dialog"><button class="close" aria-label="关闭">×</button><h2>结束本次练习？</h2><p>这桌的投放进度会清除。</p><button id="quit-practice" class="glass">退出到大厅</button></dialog>
 <dialog id="entry-dialog"><form id="entry"><button type="button" class="close" aria-label="关闭">×</button>
 <h2 id="entry-title"></h2><label>桌边昵称<input id="name" maxlength="20" required autocomplete="nickname" placeholder="朋友们怎么称呼你？"></label>
 <label id="room-input">房间码<input id="code" maxlength="8" pattern="[a-fA-F0-9]{8}" spellcheck="false" autocapitalize="characters" placeholder="8 位房间码"></label><button class="primary" id="enter"></button></form></dialog>

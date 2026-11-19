@@ -37,13 +37,15 @@ export function roomClient(onChange) {
     notify();
   }
   return { connect,
-    enter(type,name,room) {
-      saved = { hello: { type, name, key:crypto.randomUUID(), ...(type==='join'?{room}:{}) }, pending:null };
+    enter(type,name,room, f1=false) {
+      saved = { hello: { type, name, key:crypto.randomUUID(), ...(type==='join'?{room}:{}), ...(type==='practice'?{f1}:{}) }, pending:null };
       message='连接中…'; persist(); connect();
     },
     reset() {
       clearTimeout(timer);
-      const old=socket; socket=null; old?.close();
+      const old=socket; socket=null;
+      if (view?.practice && old?.readyState === WebSocket.OPEN) old.send(JSON.stringify({type:'leavePractice'}));
+      old?.close();
       saved=null; view=null; online=false; message=''; persist(); notify();
     },
     act(command) {
