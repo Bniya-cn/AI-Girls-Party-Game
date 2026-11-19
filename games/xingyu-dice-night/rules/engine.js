@@ -6,7 +6,8 @@ import { initialGrayGroups, triggersBlockIt, placeGrayGroup } from './block-it.j
 import { beginBoards, note, openVenue, p0, refreshLead, takeDie } from './royale.js';
 import { prizes } from './royale-prizes.js';
 import { moves, powerOptions } from './royale-moves.js';
-const modules={...p0,...prizes,...moves};
+import { encounters } from './encounters.js';
+const modules={...p0,...prizes,...moves,...encounters};
 
 export const defaultConfig = () => ({ seats: 5, modules: [] });
 export function lobby(name) {
@@ -46,7 +47,8 @@ function finishRound(state) {
           {seat:paid?award.owner:null,owner:award.owner,card,venue:i+1,value:award.value});
       });
     });
-    for(const {face} of [...state.config.modules].sort((a,b)=>a.venue-b.venue))modules[face]?.payout?.(state);
+    g.history.at(-1).plays=structuredClone(g.plays);
+    g.history.at(-1).modules=structuredClone(state.config.modules);
     g.history.at(-1).events=g.events.slice();
     g.prizes=[]; // Paid cards now belong exclusively to wallets or discards.
   }
@@ -55,6 +57,10 @@ function finishRound(state) {
 }
 function nextTurn(state,pair) {
   const g = state.game;
+  if(g.activePlay){
+    g.plays.push({...g.activePlay,end:g.serial});
+    g.activePlay=null;
+  }
   g.roll = [];
   for (let step = 1; step <= g.hands.length; step++) {
     const next = (g.actor + step) % g.hands.length;
@@ -64,15 +70,17 @@ function nextTurn(state,pair) {
       return;
     }
   }
-  if(state.config.modules.some(m=>m.face==='B1')){
-    prizes.B1.beforePayout(state,pair);
-    if(g.pending)return;
-  }
   finishRound(state);
 }
 
-function beginRound(state, starter, outcomes) {
+function beginRound(state, starter, outcomes, layout) {
   const g=state.game;
+  if(state.config.mode==='shuffle'){
+    validateConfig({seats:state.config.seats,mode:'custom',modules:layout});
+    check(layout.length===3 && layout.every((m,i)=>m.venue===i+1),'随机布局须挂在 1–3 号场地');
+    state.config.modules=structuredClone(layout);
+  }
+  g.plays=[];g.activePlay=null;
   g.round++;
   g.starter=g.actor=starter;
   g.hands=state.players.map(p=>dice(p.id));
@@ -95,7 +103,7 @@ const shape = { configure: ['config'], ready: ['value'], start: [], nextRound: [
   pass: [], gray: ['group', 'venue'], decide:['id','key'], power:['key'] };
 
 // All entropy is explicit input. Replaying the same state, command and outcomes is deterministic.
-export function transition(previous, actor, command, outcomes = [], deckOrder, bonusDice = []) {
+export function transition(previous, actor, command, outcomes = [], deckOrder, bonusDice = [], layout) {
   check(command && typeof command.kind === 'string' && Object.hasOwn(shape, command.kind) && fields(command, ['kind', ...shape[command.kind]]), '动作格式错误');
   check(Number.isInteger(actor) && previous.players[actor], '未知座位');
   const state = structuredClone(previous);
@@ -126,17 +134,17 @@ export function transition(previous, actor, command, outcomes = [], deckOrder, b
     const deck=deckOrder ?? orderedDeck();
     check(deck.length===90 && new Set(deck).size===90 && deck.every(id=>Number.isInteger(id)&&id>=0&&id<90),'牌堆错误');
     state.game={round:0,deck:[...deck],wallets:state.players.map(()=>[]),chips:state.players.map(()=>0),history:[]};
-    if(state.config.mode==='custom' || state.config.modules.some(m=>m.face!=='F1')){
+    if(state.config.mode || state.config.modules.some(m=>m.face!=='F1')){
       state.game.bank=state.game.deck.splice(36);
-      state.game.discards=[];state.game.serial=0;
+      state.game.discards=[];state.game.serial=0;state.game.payments=state.players.map(()=>[]);
     }
-    beginRound(state,0,outcomes);
+    beginRound(state,0,outcomes,layout);
     return state;
   }
   const g = state.game;
   if (kind === 'nextRound') {
     check(actor===0 && state.phase==='between','仅房主可在轮末开启下一轮');
-    beginRound(state,g.history.at(-1).nextStarter,outcomes);
+    beginRound(state,g.history.at(-1).nextStarter,outcomes,layout);
     return state;
   }
   if(kind==='decide'){
@@ -144,12 +152,9 @@ export function transition(previous, actor, command, outcomes = [], deckOrder, b
     check(state.phase==='decision' && pending && pending.seat===actor,'尚未轮到此座位选择');
     check(command.id===pending.id && pending.options.some(o=>o.key===command.key),'选择已过期或无效');
     g.pending=null;
-    modules[pending.face].choose(state,pending,command.key,pair);
+    modules[pending.face].choose(state,pending,command.key,pair,activateBoard);
     refreshLead(state);
-    if(!g.pending){
-      if(pending.face==='B1')finishRound(state);
-      else nextTurn(state,pair);
-    }
+    if(!g.pending && state.phase!=='gray')nextTurn(state,pair);
     return state;
   }
   check(g && g.actor === actor, '尚未轮到此座位');
@@ -164,7 +169,10 @@ export function transition(previous, actor, command, outcomes = [], deckOrder, b
   }
   if (kind === 'roll') {
     check(state.phase === 'roll', '当前不能掷骰');
-    g.roll = rolled(g.hands[actor], outcomes);
+    const firstLessonRoll=state.config.mode==='lesson' && g.round===1 && actor===0 && !g.lessonStarted;
+    if(firstLessonRoll)g.lessonStarted=true;
+    const target=state.config.modules[0]?.venue;
+    g.roll = rolled(g.hands[actor],firstLessonRoll?g.hands[actor].map((_,i)=>i<5?target:1+(target+i-5)%6):outcomes);
     state.phase = 'select';
     if(!g.roll.some(d=>openVenue(state,d.face))){
       note(g,'E1','本次点数全部被封，免费让过',{seat:actor});nextTurn(state,pair);
@@ -201,9 +209,24 @@ export function transition(previous, actor, command, outcomes = [], deckOrder, b
 function afterPlace(state,n,pair){
   const g=state.game,face=state.config.modules.find(m=>m.venue===n)?.face;
   if(g.boards)refreshLead(state);
+  if(face && g.boards)g.activePlay={owner:g.actor,face,venue:n,start:g.serial};
+  activateBoard(state,n,pair,false);
+  if(g.boards)refreshLead(state);
+  if(!g.pending && state.phase!=='gray')nextTurn(state,pair);
+}
+function activateBoard(state,n,pair,indirect){
+  const g=state.game,face=state.config.modules.find(m=>m.venue===n)?.face;
+  if(!face)return;
   if(triggersBlockIt(state,n)){g.roll=[];state.phase='gray';return;}
+  if(indirect && face==='C1'){
+    note(g,face,'借用没有放入新骰，五星令牌保持原位');return;
+  }
+  const serial=g.serial;
   modules[face]?.enter?.(state,n,g.actor,pair);
-  if(!g.pending)nextTurn(state,pair);
+  if(!g.pending && g.boards && serial===g.serial){
+    const quiet={F1:'五组灰骰均已取完',C1:g.boards.high===null?'实力未达五点':'本轮五星奖励已领',D2:'领先令牌归属不变',F2:'没有可取的灰骰',G2:'没有可移入副板的己骰'};
+    note(g,face,quiet[face]??'当前没有可执行的效果',{seat:g.actor});
+  }
 }
 
 function royaleView(s,seat){
@@ -213,7 +236,8 @@ function royaleView(s,seat){
     options:p.seat===seat?structuredClone(p.options):[]};
   if(p?.face==='B2'){pending.progress=p.context.index;pending.total=p.context.sum;}
   if(p?.step==='guess' && seat===g.actor)pending.committed=p.context.hidden;
-  return {boards:structuredClone(g.boards),events:structuredClone(g.events),pending,
+  return {plays:structuredClone(g.plays),boards:structuredClone(g.boards),events:structuredClone(g.events),pending,
+    payments:g.payments[seat]?.map(t=>({...t,paid:t.paid.map(cardValue),back:t.back.map(cardValue)})),
     bank:g.bank.map(cardValue),wallet:g.wallets[seat]?.map(cardValue),
     power:s.phase==='roll' && seat===g.actor?powerOptions(s,seat):[]};
 }

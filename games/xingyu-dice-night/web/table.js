@@ -36,6 +36,7 @@ export function makeTable(stage,buttons) {
   scene.add(new THREE.HemisphereLight(0xfff4df,0xa1b5c3,2.25));
   const lamp=new THREE.DirectionalLight(0xffe7c6,2);lamp.position.set(-2,8,4);scene.add(lamp);
   let frame=0, start=0, rollKey='', moving=[], current=null, centers=[];
+  let flights=[];
   const models=modelRegistry(undefined,undefined,invalidate);
   const furniture=new THREE.Group(), pieces=new THREE.Group();scene.add(furniture,pieces);
   const table=place(furniture,models.table(),0,-.36,0);
@@ -106,22 +107,32 @@ export function makeTable(stage,buttons) {
     if(current) update(current);invalidate();
   }
   function update(state) {
+    const previous=current;
     current=state;if(!centers.length)return;
+    const front=Math.max(...centers.map(p=>p[1]))+1.56;
+    const fromTray=previous?.phase==='select' && previous.game.round===state.game?.round?previous.game.roll:[];
+    const lastFlight=new Map(flights.filter(f=>performance.now()-f.start<300).map(f=>[f.id,f]));
+    flights=[];
     pieces.clear();moving=[];
     const g=state.game;mountBoards(state.config.modules);
     g?.venues.forEach((dice,i)=>dice.forEach((d,j)=>{
       const [x,z]=centers[i],size=d.big ? .33 : .245;
       const die=place(pieces,models.die(d),x-1.34+(j%8)*.37,.14+size/2+Math.floor(j/16)*.34,z+.36+(Math.floor(j/8)%2)*.32);
       die.scale.setScalar(size);
+      const trayIndex=fromTray.findIndex(r=>r.id===d.id);
+      const flight=lastFlight.get(d.id);
+      if(trayIndex!==-1 || flight){
+        flights.push({id:d.id,die,to:die.position.clone(),from:flight?.from??new THREE.Vector3(-.6+trayIndex*.43,.23,front),start:flight?.start??performance.now()});
+      }
     }));
-    const front=Math.max(...centers.map(p=>p[1]))+1.56;
     g?.chips.forEach((count,i)=>{for(let j=0;j<count;j++){
       const chip=place(pieces,models.chip(),-2.93+i*.41,.05+j*.075,front);chip.scale.setScalar(.72);
     }});
-    const key=JSON.stringify(g?.roll||[]);
+    const tray=state.phase==='select'?g.roll:[];
+    const key=JSON.stringify(tray);
     if(key!==rollKey)start=performance.now();
     rollKey=key;
-    for(const [i,d] of (g?.roll||[]).entries()){
+    for(const [i,d] of tray.entries()){
       const item=place(pieces,models.die(d),-.6+i*.43,.23,front);
       item.scale.setScalar(d.big ? .37 : .30);moving.push(item);
     }
@@ -131,7 +142,15 @@ export function makeTable(stage,buttons) {
   function draw(now){frame=0;
     const t=matchMedia('(prefers-reduced-motion: reduce)').matches?1:Math.max(0,Math.min(1,(now-start)/430));
     for(const die of moving){die.rotation.x=(1-t)*Math.PI*2;die.position.y=.23+Math.sin(t*Math.PI)*.48;}
-    renderer.render(scene,camera);if(moving.length&&t<1)invalidate();
+    const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let traveling=false;
+    for(const f of flights){
+      const ratio=reduced?1:Math.min(1,Math.max(0,(now-f.start)/290));
+      f.die.position.lerpVectors(f.from,f.to,ratio);
+      f.die.position.y+=Math.sin(Math.PI*ratio)*.6;
+      if(ratio<1)traveling=true;
+    }
+    renderer.render(scene,camera);if(traveling || (moving.length&&t<1))invalidate();
   }
   const resize=new ResizeObserver(layout);resize.observe(stage);window.addEventListener('resize',layout);
   stage.classList.remove('flat');stage.classList.add('spatial');layout();

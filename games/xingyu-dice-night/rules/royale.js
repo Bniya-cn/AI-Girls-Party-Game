@@ -46,7 +46,7 @@ export function reward(g,face,seat,units) {
 }
 export function beginBoards(s) {
   const g=s.game;
-  g.boards={closed:null,gate:0,jackpot:3,high:null,lead:null,double:[],bar:[],nice:Array(6).fill(null),handicap:Array(9).fill(null)};
+  g.boards={gold:null,goldPaid:[],nicePaid:[],doublePaid:s.players.map(()=>0),closed:null,gate:0,jackpot:3,high:null,lead:null,double:[],bar:[],nice:Array(6).fill(null),handicap:Array(9).fill(null)};
   g.events=[];g.pending=null;
   if(boardVenue(s,'F2')){
     g.venues.forEach((pile,i)=>{

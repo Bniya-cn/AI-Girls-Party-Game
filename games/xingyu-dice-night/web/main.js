@@ -2,8 +2,7 @@ import './style.css';
 import { artUrl } from './art.js';
 import { roomClient } from './transport.js';
 import { guidedHint, lessons } from './tutorial.js';
-import { boards, sample, boardName, pickTable, boardStatus, eventText, viewJournal, moduleBadge, arrangement } from './royale-ui.js';
-import { faces } from '../rules/modules.js';
+import { boards, sample, party, drawEncounter, landingPreview, entryEffect, boardName, pickTable, boardStatus, eventText, viewJournal, moduleBadge, arrangement } from './royale-ui.js';
 
 document.documentElement.style.setProperty('--evening','url("'+artUrl('evening')+'")');
 for(const image of document.querySelectorAll('[data-art]')) image.src=artUrl(image.dataset.art);
@@ -50,9 +49,11 @@ function lessonPage(index) {
   $('guide-start').textContent=latest?.view?'开启桌边指引':index===lessons.length-1?'跟着练 · 灰骰板':'跟着练 · 基础桌';
 }
 function openHelp(){lessonPage(0);$('help-dialog').showModal();}
-$('practice').onclick=()=>practice();
+$('practice').onclick=()=>practice(party);
+$('shuffle-table').onclick=()=>practice({mode:'shuffle',modules:[]});
+$('base-table').onclick=()=>practice(false);
 $('sample-table').onclick=()=>practice(sample);
-$('custom-table').onclick=()=>pickTable(sample,slots=>practice(slots),true);
+$('custom-table').onclick=()=>pickTable(sample,slots=>practice(slots),true,face=>practice({mode:'lesson',modules:[{face,venue:1}]}));
 $('ledger-button').onclick=()=>{const v=latest.view;viewJournal(v.state,v.you);$('ledger-dialog').showModal();};
 $('lobby-help').onclick=openHelp;$('room-help').onclick=openHelp;
 $('lesson-prev').onclick=()=>lessonPage(lesson-1);
@@ -65,7 +66,7 @@ $('skip-guide').onclick=()=>{setGuide(false);render(latest);};
 $('quit-practice').onclick=()=>{$('exit-dialog').close();client.reset();};
 const targets=venues.map((name,i)=>{
   const b=el('button',undefined,'venue');b.type='button';b.style.setProperty('--picture','url("'+artUrl('venue-'+(i+1))+'")');
-  b.append(el('span',String(i+1),'face-number'),el('span',name,'venue-name'),el('span','','prize'),el('span','','quantity'));
+  b.append(el('span',String(i+1),'face-number'),el('span',name,'venue-name'),el('span','','prize'),el('span','','tile-caption'),el('span','','quantity'));
   b.onclick=()=>chooseVenue(i+1);$('targets').append(b);return b;
 });
 function showNotice(){
@@ -136,7 +137,8 @@ function showResults(){
       details.append(el('p',(i+1)+' 号　'+venue.awards.map(a=>awardText(s,a)).join('　／　')+
         (tied.length?'；同实力退出：'+tied.join('、'):'')));
     });
-    for(const e of entry.events??[])details.append(el('p',eventText(e,s)));
+    if(entry.modules?.length)details.append(el('p','本轮拼板　'+entry.modules.map(m=>m.venue+'号 '+boardName(m.face)).join(' ／ ')));
+    for(const e of entry.events??[])if(e.face!=='主场')details.append(el('p',eventText(e,s)));
     accounts.append(details);
   }
   if(!$('result-dialog').open)$('result-dialog').showModal();
@@ -176,8 +178,9 @@ function renderOptions(){
   button(box,'挑选拼板',()=>{ $('settings-dialog').close();pickTable(cfg.modules,modules=>client.act({kind:'configure',config:{seats:cfg.seats,mode:'custom',modules}}),false);});
   if(!cfg.mode)choices('经典 F1 练习',[[0,'关闭'],...venues.map((_,i)=>[i+1,(i+1)+'号'])],f1,n=>configure(cfg.seats,n));
   else button(box,'恢复基础桌',()=>configure(cfg.seats,0));
-  const details=el('details');details.append(el('summary','尚未上线的三面'),el('p',Object.values(faces).filter(f=>!f.enabled).map(f=>f.id+' '+f.name).join(' · ')));
-  box.append(details);
+  button(box,'六场派对桌',()=>client.act({kind:'configure',config:{seats:cfg.seats,mode:'custom',modules:party}}));
+  button(box,'每轮随机三板',()=>client.act({kind:'configure',config:{seats:cfg.seats,mode:'shuffle',modules:[]}}));
+  if(cfg.mode==='shuffle')box.append(el('p','开轮时抽三块实体板，随机面挂在 1–3 号。'));
 }
 function renderSeats(v){
   const s=v.state,container=$('seats');container.replaceChildren();
@@ -208,11 +211,12 @@ function renderHUD(v,blocked){
     if(v.you===0)act('进入第 '+(g.round+1)+' 轮',{kind:'nextRound'},blocked||v.online.includes(false));
   }else if(s.phase==='complete'){
     title='三轮对局完成';hint='查看总分与每轮的场地明细。';button(actions,'终局记分',showResults);actions.append(art('ribbons','ribbons'));
-    if(v.practice)button(actions,'再玩一局',()=>practice(s.config.mode==='custom'?s.config.modules:s.config.modules.length>0),{cls:'primary'});
+    if(v.practice)button(actions,'换桌 · 随机三板',()=>practice({mode:'shuffle',modules:[]}));
+    if(v.practice)button(actions,'再玩一局',()=>practice(s.config.mode?{mode:s.config.mode,modules:s.config.mode==='shuffle'?[]:s.config.modules}:s.config.modules.length>0),{cls:'primary'});
     button(actions,'回到大厅',()=>client.reset(),{cls:'primary'});
   }else{
     const mine=g.actor===v.you,locked=!actionable();title=mine?'轮到你了':s.players[g.actor].name+' 的回合';
-    if(s.phase==='roll'){hint='掷出手中全部骰子。';if(mine)act('掷骰　×'+g.remaining[v.you],{kind:'roll'},locked);}
+    if(s.phase==='roll'){hint=s.config.mode==='lesson' && g.round===1?'单板教学 · 首掷含五颗目标点数骰，落到 1 号即开玩。':'掷出手中全部骰子。';if(mine)act('掷骰　×'+g.remaining[v.you],{kind:'roll'},locked);}
     if(mine && g.power?.length)button(actions,'使用领先令牌',()=>{
       const box=$('power-options');box.replaceChildren();
       for(const o of g.power)button(box,o.label,()=>{$('power-dialog').close();client.act({kind:'power',key:o.key});});
@@ -220,13 +224,7 @@ function renderHUD(v,blocked){
     },{disabled:locked});
     if(s.phase==='decision'){
       const p=g.pending;
-      actions.append(arrangement(p.face,s));
-      title=boardName(p.face);hint=p.prompt;
-      if(p.seat===v.you){
-        const options=el('div',undefined,'mini-choices');
-        options.setAttribute('aria-label',p.prompt);actions.append(options);
-        for(const o of p.options)button(options,o.label,()=>client.act({kind:'decide',id:p.id,key:o.key}),{disabled:locked,cls:'choice'});
-      }else if(p.committed)hint+=' · 你已藏 '+p.committed+' 枚';
+      title=boardName(p.face);hint=p.seat===v.you?'在桌上完成小游戏。':p.prompt;
     }
     if(s.phase==='select'){
       hint=mine?'点亮的场地可接收整组同点骰。':'等待选择场地。';
@@ -253,7 +251,7 @@ function renderHUD(v,blocked){
 function render(packet){
   latest=packet;const {view,online,pending,saved}=packet;
   $('lobby').hidden=!!view;$('room').hidden=!view;$('recover').hidden=!saved||online;
-  $('sample-table').disabled=$('custom-table').disabled=$('practice').disabled=$('lobby-help').disabled=$('create').disabled=$('join').disabled=saved;showNotice();
+  $('shuffle-table').disabled=$('base-table').disabled=$('sample-table').disabled=$('custom-table').disabled=$('practice').disabled=$('lobby-help').disabled=$('create').disabled=$('join').disabled=saved;showNotice();
   if(!view){lastView=null;lastPhase=null;document.body.classList.remove('playing');return;}
   document.body.classList.add('playing');
   const s=view.state;
@@ -270,6 +268,20 @@ function render(packet){
   if(s.phase==='roll' && $('result-dialog').open)$('result-dialog').close();
   lastPhase=s.phase;
   renderSeats(view);renderHUD(view,!online||pending);
+  drawEncounter(view,!actionable(),key=>client.act({kind:'decide',id:s.game.pending.id,key}));
+  const play=s.game?.plays?.findLast(p=>p.owner===view.you)??s.game?.plays?.at(-1);
+  const receipt=$('play-receipt');
+  receipt.hidden=!play||s.phase==='decision'||['between','complete'].includes(s.phase);
+  if(play && !receipt.hidden){
+    const entries=s.game.events.filter(e=>e.id>play.start && e.id<=play.end);
+    const visible=entries.slice(-3).map(e=>eventText(e,s)).join('　·　');
+    const token=view.room+'/'+play.start+'/'+s.game.round;
+    if(receipt.dataset.token!==token){
+      receipt.dataset.token=token;
+      if(!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)receipt.animate?.([{backgroundColor:'#775e36'},{backgroundColor:'#203746e8'}],{duration:540});
+    }
+    receipt.textContent=s.players[play.owner].name+'的上次入场　'+boardName(play.face)+'　'+(visible||'已完成');
+  }
   targets.forEach((b,i)=>{
     const n=i+1,valid=legal(n),slot=s.config.modules.find(m=>m.venue===n),tile=!!slot;
     const last=s.game?.events?.at(-1);
@@ -279,12 +291,15 @@ function render(packet){
     b.dataset.face=slot?.face||'';b.classList.toggle('closed',n===s.game?.boards?.closed);
     const current=b.querySelector('.board-art');if(current?.dataset.face!==slot?.face){current?.remove();if(slot){const icon=moduleBadge(slot.face);icon.dataset.face=slot.face;b.prepend(icon);}}
     b.classList.toggle('legal',valid);b.classList.toggle('attached',tile);
-    const rollCount=s.phase==='select'?s.game.roll.filter(d=>d.face===n).length:0;
+
     const num=s.game?.venues[i].length||0;
     const prize=b.querySelector('.prize');
     prize.textContent=s.game?s.game.prizes[i].map(value=>value/10000).join(' / ')+' 万':'';
-    b.lastChild.textContent=valid?(s.phase==='gray'?'放灰骰':'落骰 ×'+rollCount):num?num+' 颗':'';
-    b.setAttribute('aria-label',n+'号 '+venues[i]+(valid?'，可投放':'，查看场地')+(tile?'，'+boardName(slot.face):'')+(s.game?'，奖金 '+prize.textContent:''));
+    b.lastChild.textContent=valid?(s.phase==='gray'?'放灰骰':landingPreview(s,view.you,n)):num?num+' 颗':'';
+    const opportunity=valid && s.phase==='select'?entryEffect(s,n,view.you):'';
+    b.querySelector('.tile-caption').textContent=slot?(opportunity||boards[slot.face][0]):'';
+    b.title=slot?boardName(slot.face)+' · '+boards[slot.face][1]:venues[i];
+    b.setAttribute('aria-label',n+'号 '+venues[i]+(valid?'，可投放':'，查看场地')+(tile?'，'+boardName(slot.face)+(opportunity?'，'+opportunity:''):'')+(s.game?'，奖金 '+prize.textContent:''));
   });
   if(lastView!==s){render3D?.(s);lastView=s;}
   if(!loading3D){loading3D=true;import('./table.js').then(({makeTable})=>{

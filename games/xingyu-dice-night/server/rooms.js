@@ -1,3 +1,4 @@
+import { randomLayout } from '../rules/royale.js';
 import { shuffledDeck } from '../rules/payout.js';
 import { randomBytes, randomInt } from 'node:crypto';
 import { practiceState, computerAction, computerSeat, decider } from './practice.js';
@@ -29,7 +30,7 @@ export function attachRooms(server, {botDelayMs=650, randomIndex=randomInt}={}) 
     if (['start','nextRound'].includes(command?.kind) && room.state.players.length === 2) outcomes = roll(8);
     if (command?.kind === 'roll' && room.state.phase === 'roll' && room.state.game.actor === actor)
       outcomes = roll(room.state.game.hands[actor].length);
-    room.state = transition(room.state, actor, command, outcomes, command?.kind==='start'?shuffledDeck(randomIndex):undefined,roll(4));
+    room.state = transition(room.state, actor, command, outcomes, command?.kind==='start'?shuffledDeck(randomIndex):undefined,roll(4), ['start','nextRound'].includes(command?.kind) && room.state.config.mode==='shuffle'?randomLayout(randomIndex):undefined);
     room.revision++;
   }
   function scheduleComputer(room) {
@@ -69,12 +70,12 @@ export function attachRooms(server, {botDelayMs=650, randomIndex=randomInt}={}) 
         check(!binary, '仅接受 JSON 文本');
         m = JSON.parse(data.toString());
         if (!seat) {
-          const keys = { practice:['type','key','name',m?.modules!==undefined?'modules':'f1'], create: ['type','key','name'], join: ['type','key','name','room'], resume: ['type','key','room'] };
+          const keys = { practice:['type','key','name',m?.setup!==undefined?'setup':m?.modules!==undefined?'modules':'f1'], create: ['type','key','name'], join: ['type','key','name','room'], resume: ['type','key','room'] };
           check(m && typeof m.type === 'string' && Object.hasOwn(keys, m.type) && fields(m, keys[m.type]) && uuid(m.key), '入房格式错误');
-          if (m.type === 'practice') check(Array.isArray(m.modules) || typeof m.f1 === 'boolean', '练习配置错误');
+          if (m.type === 'practice') check((fields(m.setup,['mode','modules']) && ['shuffle','lesson','custom'].includes(m.setup.mode)) || Array.isArray(m.modules) || typeof m.f1 === 'boolean', '练习配置错误');
           if (m.type === 'resume' || m.type === 'join') check(typeof m.room === 'string' && /^[A-F0-9]{8}$/.test(m.room), '房间码无效');
           if (m.type !== 'resume') check(typeof m.name === 'string' && m.name.trim().length > 0 && m.name.length <= 20, '昵称须为 1–20 字');
-          const handshake = JSON.stringify([m.type,m.room,m.name,m.modules??m.f1]);
+          const handshake = JSON.stringify([m.type,m.room,m.name,m.setup??m.modules??m.f1]);
           const existing = credentials.get(m.key);
           if (existing) {
             check((m.type === 'resume' && m.room === existing.room.code) || existing.handshake === handshake, '席位凭证不匹配');
@@ -86,7 +87,7 @@ export function attachRooms(server, {botDelayMs=650, randomIndex=randomInt}={}) 
               let code;
               do { code = randomBytes(4).toString('hex').toUpperCase(); } while (rooms.has(code));
               const practice = m.type === 'practice';
-              const state = practice ? practiceState(m.name.trim(), m.modules??m.f1, roll(8), shuffledDeck(randomIndex)) : lobby(m.name.trim());
+              const state = practice ? practiceState(m.name.trim(), m.setup??m.modules??m.f1, roll(8), shuffledDeck(randomIndex),randomIndex) : lobby(m.name.trim());
               room = { code, revision: 1, state, practice, seats: [], lastSeen: Date.now() };
               rooms.set(code, room);
             } else {

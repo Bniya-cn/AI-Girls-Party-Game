@@ -16,7 +16,7 @@ function land(s,n,roll,extra){
 function conserve(s){
   const g=s.game,cards=[...g.deck,...g.discards,...g.wallets.flat(),...g.prizes.flat(),...g.bank];
   assert.equal(cards.length,90);assert.equal(new Set(cards).size,90);
-  const dice=[...g.hands.flat(),...g.venues.flat(),...g.boards.double,...g.boards.nice.filter(Boolean),...g.boards.bar,...g.boards.handicap.filter(Boolean)];
+  const dice=[...g.hands.flat(),...g.venues.flat(),...g.boards.double,...g.boards.nice.filter(Boolean),...g.boards.bar,...g.boards.handicap.filter(Boolean),...[g.boards.gold].filter(Boolean)];
   assert.equal(new Set(dice.map(d=>d.id)).size,dice.length);
   for(const owner of [0,1])assert.equal(dice.filter(d=>d.owner===owner&&!d.extra).length,8);
 }
@@ -43,8 +43,8 @@ test('C1 crosses five; G2 moves old dice once; B1 can place a single matching ex
   s=land(s,1,[1,1,1,2,2,2,2,1]);assert.equal(s.game.boards.high,0);
   s=land(s,2,[2,3,3,3,3,3,3,2]);s=choose(s,'1-7');s=choose(s,'done');
   assert.equal(s.game.boards.double[0].big,true);assert.equal(s.game.venues[1].length,1);
-  s=land(s,3);s=land(s,5,undefined,[4,4]);assert.equal(s.game.pending.face,'B1');
-  s=choose(s,'1');assert.equal(s.phase,'between');assert.equal(s.game.venues[3].filter(d=>d.extra).length,1);
+  s=land(s,3,undefined,[4,4]);assert.equal(s.game.pending.face,'B1');
+  s=choose(s,'1');assert.equal(s.phase,'roll');s=land(s,5);assert.equal(s.phase,'between');assert.equal(s.game.venues[3].filter(d=>d.extra).length,1);
   assert.deepEqual(s.game.events.filter(e=>e.cash).map(e=>e.face),['C1','G2']);conserve(s);
 });
 test('F1 removes D2 lead; E1 rejects closed gray destinations; D2 can trigger A2',()=>{
@@ -70,9 +70,9 @@ test('E2 returns dice on final placement; F2 never triggers destination; H1 ejec
   assert.equal(s.game.venues[1][0].owner,0);assert.equal(s.game.boards.nice[1].owner,1);
   assert.equal(s.game.events.filter(e=>e.face==='D1').length,0);conserve(s);
 });
-test('all 13 selectable faces finish three rounds against seat-filtered bots and conserve pieces every step',()=>{
+test('all 16 selectable faces finish three rounds against seat-filtered bots and conserve pieces every step',()=>{
   const enabled=Object.values(faces).filter(f=>f.enabled).map(f=>f.id);
-  assert.equal(enabled.length,13);
+  assert.equal(enabled.length,16);
   for(const group of [...enabled.map(f=>[f]),['A1','D1','F1'],['B1','E1','D2','F2','H1','G2'],['B2','C1','E2','A2','G2','F1']]){
     for(let seed=1;seed<=5;seed++){
       const rand=rng(seed),roll=n=>Array.from({length:n},()=>1+rand(6));
@@ -123,7 +123,7 @@ test('H1 pays the occupied slots once and releases its slots for the next round'
   assert.equal(s.game.chips[0],3);conserve(s);
   s=go(s,{kind:'nextRound'},Array(8).fill(6));assert.ok(s.game.boards.nice.every(x=>x===null));assert.equal(s.game.chips[0],5);
 });
-test('B1 neutral winner cannot make a choice; custom reserve stays separate even if bank runs short',()=>{
+test('No deferred B1 decision at round end; custom reserve stays separate even if bank runs short',()=>{
   let s=setup('A2','B1');
   s.game.venues[1]=s.game.venues[5].splice(0).map(d=>({...d,face:2}));
   s.game.wallets[1].push(...s.game.bank.splice(0));

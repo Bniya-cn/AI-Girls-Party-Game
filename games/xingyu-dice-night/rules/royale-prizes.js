@@ -1,5 +1,5 @@
 import { strengths } from './payout.js';
-import { ask, boardVenue, dieLabel, note, openVenue, option, reward, skip, takeDie } from './royale.js';
+import { ask, dieLabel, note, openVenue, option, reward, skip, takeDie } from './royale.js';
 
 const steps=[0,1,3,4,6];
 function guess(s,a,index,dice){
@@ -8,7 +8,7 @@ function guess(s,a,index,dice){
     [option('stop','收手领取'),option('up','猜更高'),option('down','猜更低')],{sum,index});
 }
 function transfer(s,n,a){
-  const mine=s.game.venues[n-1].filter(d=>d.owner===a);
+  const mine=s.game.venues[n-1].filter(d=>d.owner===a && !d.extra);
   if(mine.length)ask(s,'G2','transfer',a,'移哪颗到副板？可继续移或结束',
     [option('done','完成'),...mine.map(d=>option(d.id,dieLabel(d)))],{n});
 }
@@ -37,37 +37,45 @@ export const prizes={
   }},
   C1:{enter(s,n,a){
     if(s.game.boards.high===null && strengths(s.game.venues[n-1]).some(row=>row.owner===a && row.strength>=5)){
-      s.game.boards.high=a;note(s.game,'C1','取得五星令牌，轮末兑付 10 万',{seat:a});
+      s.game.boards.high=a;note(s.game,'C1','取得五星令牌',{seat:a});reward(s.game,'C1',a,10);
     }
-  },payout(s){
-    const owner=s.game.boards.high;
-    if(owner!==null)reward(s.game,'C1',owner,10);
   }},
   G2:{enter:transfer,choose(s,p,key){
-    if(key==='done')return;
+    if(key==='done'){paySide(s,p.seat);return;}
     const {n}=p.context;
     const die=takeDie(s.game.venues[n-1],key);
     s.game.boards.double.push(die);note(s.game,'G2',dieLabel(die)+' 移至副板',{seat:p.seat});
     transfer(s,n,p.seat);
-  },payout(s){
-    const ranks=strengths(s.game.boards.double).filter(row=>!row.tied);
-    for(const [i,r] of ranks.slice(0,2).entries())reward(s.game,'G2',r.owner,i===0?6:3);
+    if(!s.game.pending)paySide(s,p.seat);
   }},
-  B1:{beforePayout(s,pair){
-    const n=boardVenue(s,'B1'),winner=strengths(s.game.venues[n-1]).find(row=>!row.tied)?.owner;
-    if(!Number.isInteger(winner)){note(s.game,'B1','无玩家取得头奖，略过额外骰');return;}
-    const dice=pair(),opts=[skip];
-    for(let mask=1;mask<=3;mask++){
+  B1:{enter(s,n,winner,pair){
+    const g=s.game;
+    // Two reusable black dice. A die inside a sealed venue cannot be lifted.
+    const locked=g.venues.flatMap((pile,i)=>openVenue(s,i+1)?[]:pile.filter(d=>d.extra).map(d=>d.id));
+    const available=['black-0','black-1'].filter(id=>!locked.includes(id));
+    if(!available.length){note(g,'B1','两颗支援骰都被封场锁住');return;}
+    g.venues=g.venues.map(pile=>pile.filter(d=>!available.includes(d.id)));
+    const dice=pair().slice(0,available.length),opts=[skip];
+    for(let mask=1;mask<(1<<dice.length);mask++){
       const selected=dice.filter((_,i)=>mask & (1<<i));
       if(selected.every(face=>openVenue(s,face)))opts.push(option(mask,'投放 '+selected.map(n=>n+'号').join('、')));
     }
-    note(s.game,'B1','轮末黑骰 '+dice.join('、'),{seat:winner});
-    ask(s,'B1','extra',winner,'派彩前选择黑骰 · '+dice.join('、'),opts,{dice});
+    note(s.game,'B1','即时支援骰 '+dice.join('、'),{seat:winner});
+    ask(s,'B1','extra',winner,'选择要派往场地的支援骰 · '+dice.join('、'),opts,{dice,available});
   },choose(s,p,key){
     if(key==='skip')return;
     p.context.dice.forEach((face,i)=>{
-      if(Number(key)&(1<<i))s.game.venues[face-1].push({id:'extra-'+s.game.round+'-'+i,owner:p.seat,face,big:false,extra:true});
+      if(Number(key)&(1<<i))s.game.venues[face-1].push({id:p.context.available[i],owner:p.seat,face,big:false,extra:true});
     });
     note(s.game,'B1','额外骰已投放',{seat:p.seat});
   }}
 };
+
+function paySide(s,a){
+  const b=s.game.boards,ranks=strengths(b.double).filter(r=>!r.tied);
+  const rank=ranks.findIndex(r=>r.owner===a),award=[6,3][rank]??0;
+  const delta=award-b.doublePaid[a];
+  if(delta>0){
+    b.doublePaid[a]=award;reward(s.game,'G2',a,delta);
+  }else note(s.game,'G2','当前副板名次没有新增奖金',{seat:a});
+}

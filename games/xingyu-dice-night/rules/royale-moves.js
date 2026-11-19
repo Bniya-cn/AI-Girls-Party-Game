@@ -9,20 +9,27 @@ function barTurn(s,a,offset){
       ask(s,'E2','surrender',seat,'选一颗手骰放入吧台',g.hands[seat].map(d=>option(d.id,dieLabel(d))),{offset:i});return;
     }
   }
-  const returned=b.bar.filter(d=>d.owner===a);
+  const returned=b.bar.filter(d=>d.owner===a && !d.extra);
   g.hands[a].push(...returned);b.bar=b.bar.filter(d=>d.owner!==a);
   note(g,'E2','从吧台收回 '+returned.length+' 颗骰',{seat:a});
 }
-function handMoves(s,a){
+export function handMoves(s,a){
   const g=s.game,options=[];
   for(const n of liveVenues(s)){
-    for(const d of g.venues[n-1].filter(d=>d.owner===a))options.push(option('take/'+n+'/'+d.id,'收回 '+n+' 号的'+dieLabel(d)));
+    for(const d of g.venues[n-1].filter(d=>d.owner===a && !d.extra))options.push(option('take/'+n+'/'+d.id,'收回 '+n+' 号的'+dieLabel(d)));
   }
   // Identical unrolled small dice are interchangeable. Offer one of each size.
   for(const d of distinctSizes(g.hands[a])){
     for(const n of liveVenues(s))options.push(option('put/'+n+'/'+d.id,dieLabel(d)+' 定面到 '+n+' 号'));
   }
   return options;
+}
+export function moveOwnDie(s,a,key,face){
+  const g=s.game;
+      const [action,num,id]=key.split('/'),n=Number(num),pile=g.venues[n-1];
+      if(action==='take')g.hands[a].push(takeDie(pile,id));
+      else pile.push({...takeDie(g.hands[a],id),face:n});
+      note(g,face,action==='take'?'从 '+n+' 号收回骰':'定面至 '+n+' 号，跳过目的板效果',{seat:a});
 }
 function distinctSizes(dice){return [dice.find(d=>!d.big),dice.find(d=>d.big)].filter(Boolean);}
 export function powerOptions(s,a){
@@ -63,10 +70,7 @@ export const moves={
       if(slotAward(i))reward(g,'F2',a,slotAward(i));
       else ask(s,'F2','move',a,'定面投放或收回自己的骰',handMoves(s,a));
     }else{
-      const [action,num,id]=key.split('/'),n=Number(num),pile=g.venues[n-1];
-      if(action==='take')g.hands[a].push(takeDie(pile,id));
-      else pile.push({...takeDie(g.hands[a],id),face:n});
-      note(g,'F2',action==='take'?'从 '+n+' 号收回骰':'定面至 '+n+' 号，跳过目的板效果',{seat:a});
+      moveOwnDie(s,a,key,'F2');
     }
   }},
   H1:{enter(s,n,a){
@@ -80,8 +84,9 @@ export const moves={
     const d={...takeDie(from,key),face:rolled.face},i=d.face-1,old=g.boards.nice[i];
     if(old)g.venues[i].push(old);
     g.boards.nice[i]=d;note(g,'H1','占据 '+d.face+' 点槽'+(old?'，原骰回到主场':''),{seat:p.seat});
-  },payout(s){
-    s.game.boards.nice.forEach((d,i)=>{if(d)reward(s.game,'H1',d.owner,i+1);});
+    const stamp=p.seat+'-'+i;
+    if(!g.boards.nicePaid.includes(stamp)){g.boards.nicePaid.push(stamp);reward(g,'H1',p.seat,i+1);}
+    else note(g,'H1','本轮你已领取这个点槽的奖励',{seat:p.seat});
   }},
   D2:{enter(s,n,a){
     const top=strengths(s.game.venues[n-1])[0];

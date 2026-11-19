@@ -15,7 +15,7 @@ test('configuration rejects collisions, unfinished boards, malformed input and e
   assert.equal(Object.keys(faces).length,16);
   const f=(face,venue)=>({face,venue});
   for(const [modules,reason] of [
-    [[f('F1',2),f('F2',3)],/两面/],[[f('A1',2),f('F1',2)],/场地/],[[f('H2',2)],/尚未/],
+    [[f('F1',2),f('F2',3)],/两面/],[[f('A1',2),f('F1',2)],/场地/],[[f('H3',2)],/未知/],
     [[f('XX',1)],/未知/],[[f(['F1'],1)],/未知/],[[f('F1',7)],/未知/]
   ]) assert.throws(()=>validateConfig({seats:3,modules}),reason);
   assert.throws(()=>validateConfig({seats:6,modules:[]}));

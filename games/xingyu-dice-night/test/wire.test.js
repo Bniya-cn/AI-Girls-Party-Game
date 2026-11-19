@@ -52,7 +52,7 @@ test('two real WS clients: create/join, host permissions, revisions, replay, tak
   assert.equal((await b.state(2)).you,1);
   assert.doesNotMatch(JSON.stringify(joined),new RegExp(hostKey+'|'+guestKey));
   await rejects(b,msg(2,{kind:'configure',config:{seats:2,modules:[]}}),/房主/);
-  await rejects(a,msg(2,{kind:'configure',config:{seats:2,modules:[{face:'G1',venue:1}]}}),/尚未/);
+  await rejects(a,msg(2,{kind:'configure',config:{seats:2,modules:[{face:'G3',venue:1}]}}),/未知/);
   await apply(a,2,{kind:'configure',config:{seats:2,modules:[{face:'F1',venue:1}]}});
   await apply(a,3,{kind:'ready',value:true});
   await rejects(b,msg(3,{kind:'ready',value:true}),/版本/);
@@ -232,22 +232,47 @@ test('two-seat A1 private snapshots, unauthorized and replayed answers preserve 
   assert.deepEqual((await other.state(10)).state,paid.state);
 });
 
-test('B1 payout pauses for its own winner, resumes with original black dice and pays exactly once',async t=>{
+test('B1 opens immediately for the landing player and reconnect/replay cannot duplicate black dice',async t=>{
   let face=6;
   const service=gameServer({randomIndex:n=>n===6?face-1:0}),port=await service.listen(0);t.after(()=>service.close());
   const key=randomUUID();let a=await client(port,{type:'create',key,name:'甲'});
   const room=(await a.state(1)).room,b=await client(port,{type:'join',key:randomUUID(),name:'乙',room});
   await b.state(2);await apply(a,2,{kind:'configure',config:{seats:2,mode:'custom',modules:[{face:'B1',venue:2}]}});
   await apply(a,3,{kind:'ready',value:true});await apply(b,4,{kind:'ready',value:true});await apply(a,5,{kind:'start'});
-  face=2;await apply(a,6,{kind:'roll'});await apply(a,7,{kind:'place',face:2});
-  face=3;await apply(b,8,{kind:'roll'});face=5;await apply(b,9,{kind:'place',face:3});
-  const v=await a.state(10),p=v.state.game.pending;assert.equal(p.face,'B1');assert.equal(p.seat,0);assert.equal(v.state.game.history.length,0);
+  face=2;await apply(a,6,{kind:'roll'});face=5;const v=await apply(a,7,{kind:'place',face:2});
+  const p=v.state.game.pending;assert.equal(p.face,'B1');assert.equal(p.seat,0);assert.equal(v.state.game.history.length,0);
   assert.equal(p.options.length,4);a.socket.close();await once(a.socket,'close');
-  a=await client(port,{type:'resume',key,room});assert.deepEqual((await a.state(10)).state,v.state);
-  const request=msg(10,{kind:'decide',id:p.id,key:'1'});a.send(request);
+  a=await client(port,{type:'resume',key,room});assert.deepEqual((await a.state(8)).state,v.state);
+  const request=msg(8,{kind:'decide',id:p.id,key:'1'});a.send(request);
   const ack=await a.read(m=>m.id===request.id);assert.equal(ack.type,'ack');
-  const paid=await a.state(11);assert.equal(paid.state.phase,'between');
-  assert.equal(paid.state.game.venues[4].filter(d=>d.extra).length,1);
+  const done=await a.state(9);assert.equal(done.state.phase,'roll');assert.equal(done.state.game.actor,1);
+  assert.equal(done.state.game.venues[4].filter(d=>d.extra).length,1);
   a.send(request);assert.deepEqual(await a.read(m=>m.id===request.id),ack);
-  assert.deepEqual((await a.state(11)).state,paid.state);
+  assert.deepEqual((await a.state(9)).state,done.state);
+});
+
+test('G1 hides the partition on the wire, restores both seats and acknowledges a revealed reward only once',async t=>{
+  let face=6;
+  const service=gameServer({randomIndex:n=>n===6?face-1:0}),port=await service.listen(0);t.after(()=>service.close());
+  const ka=randomUUID(),kb=randomUUID();
+  let host=await client(port,{type:'create',key:ka,name:'旅人'});
+  const room=(await host.state(1)).room;
+  let divider=await client(port,{type:'join',key:kb,name:'店主',room});await divider.state(2);
+  await apply(host,2,{kind:'configure',config:{seats:2,mode:'custom',modules:[{venue:1,face:'G1'}]}});
+  await apply(host,3,{kind:'ready',value:true});await apply(divider,4,{kind:'ready',value:true});
+  await apply(host,5,{kind:'start'});face=1;await apply(host,6,{kind:'roll'});
+  const hidden=await apply(host,7,{kind:'place',face:1});
+  assert.deepEqual(hidden.state.game.pending.options,[]);
+  const splitting=await divider.state(8);assert.equal(splitting.state.game.pending.options.length,62);
+  await apply(divider,8,{kind:'decide',id:splitting.state.game.pending.id,key:'1'});
+  const pick=await host.state(9);
+  assert.deepEqual(pick.state.game.pending.options.map(o=>o.label),['左盒 · 1 枚','右盒 · 5 枚']);
+  assert.doesNotMatch(JSON.stringify(pick.state),/"mask"|左堆|context/);
+  host.socket.close();await once(host.socket,'close');
+  host=await client(port,{type:'resume',key:ka,room});assert.deepEqual((await host.state(9)).state,pick.state);
+  const cmd=msg(9,{kind:'decide',id:pick.state.game.pending.id,key:'left'});
+  host.send(cmd);const ack=await host.read(m=>m.id===cmd.id);assert.equal(ack.type,'ack');
+  const paid=await host.state(10);assert.equal(paid.state.phase,'roll');assert.equal(paid.state.game.history.length,0);
+  assert.ok(paid.state.game.events.some(e=>e.face==='G1' && e.cash!==undefined));
+  host.send(cmd);assert.deepEqual(await host.read(m=>m.id===cmd.id),ack);assert.deepEqual((await host.state(10)).state,paid.state);
 });

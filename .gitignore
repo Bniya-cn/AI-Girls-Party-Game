@@ -5,6 +5,7 @@ dist-preview/
 dist-practice/
 dist-match/
 dist-royale/
+dist-party/
 coverage/
 .vite/
 .cache/
